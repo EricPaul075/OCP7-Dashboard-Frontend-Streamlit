@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 import requests
@@ -48,6 +49,18 @@ def get_feature_lists():
     return features_list, cat_col, num_col
 
 features_list, cat_col, num_col = get_feature_lists()
+
+
+# Table des noms et signification des features
+@st.cache(persist=True)
+def get_feature_table():
+    df = pd.read_csv(data_path+"Features.csv", sep=';',
+                     encoding='utf-8-sig',
+                     encoding_errors='replace',)
+    df.fillna('', inplace=True)
+    return df
+
+df_features = get_feature_table()
 
 
 def get_feature_selection_list(client_id, is_wf, filter):
@@ -206,126 +219,133 @@ def bivar(feature_1, feature_2):
         img_size = 'large'
     return filepath, img_size
 
+# Onglets
+db, ft = st.tabs(["Dashboard", "Features"])
 
-# Découpage de la page web en conteneurs (horizontaux)
-header = st.container()
-client = st.container()
-empty_section = st.container()
-features_impact = st.container()
-feature_selection = st.container()
+with db:
 
-with header:
-    st.title("Analyse de crédit client")
+    # Découpage de la page web en conteneurs (horizontaux)
+    header = st.container()
+    client = st.container()
+    empty_section = st.container()
+    features_impact = st.container()
+    feature_selection = st.container()
 
-with client:
-    id_col, empty_col, score_col = st.columns([1, 1.5, 2.5], gap='large')
+    with header:
+        st.title("Analyse de crédit client")
 
-    # Identification du client
-    id_col.header('Client')
-    client_id = id_col.selectbox(
-        label="Entrez un N° client ou sélectionnez-le dans la liste:",
-        options=clients_id_list,
-        index=0)
+    with client:
+        id_col, empty_col, score_col = st.columns([1, 1.5, 2.5], gap='large')
 
-    # Colonne vide
-    empty_col.empty()
+        # Identification du client
+        id_col.header('Client')
+        client_id = id_col.selectbox(
+            label="Entrez un N° client ou sélectionnez-le dans la liste:",
+            options=clients_id_list,
+            index=0)
 
-    # Jauge de résultat du crédit
-    score_col.header("Situation d'acceptation du crédit")
-    if client_id in clients_id_list[1:]:
-        score_col.plotly_chart(set_gauge(client_id))
+        # Colonne vide
+        empty_col.empty()
 
-with features_impact:
-    gl_col, lc_col = st.columns(2, gap='large')
+        # Jauge de résultat du crédit
+        score_col.header("Situation d'acceptation du crédit")
+        if client_id in clients_id_list[1:]:
+            score_col.plotly_chart(set_gauge(client_id))
 
-    # Impact global des features
-    gl_col.header('Impact global des features')
-    gl_max_feat = gl_col.slider('Nombre de features', min_value=5, max_value=30, value=20)
-    gl_col.image(graph_features_global_impact(gl_max_feat))
+    with features_impact:
+        gl_col, lc_col = st.columns(2, gap='large')
 
-    # Impact local des features
-    lc_col.header('Impact des features sur le score client')
-    lc_max_feat = lc_col.slider('Nombre de features', min_value=5, max_value=30, value=16)
-    lc_col.image(graph_features_local_impact(client_id, max_feat=lc_max_feat))
+        # Impact global des features
+        gl_col.header('Impact global des features')
+        gl_max_feat = gl_col.slider('Nombre de features', min_value=5, max_value=30, value=20)
+        gl_col.image(graph_features_global_impact(gl_max_feat))
 
-    st.image(data_path + 'blank_space.png', use_column_width=True)
+        # Impact local des features
+        lc_col.header('Impact des features sur le score client')
+        lc_max_feat = lc_col.slider('Nombre de features', min_value=5, max_value=30, value=16)
+        lc_col.image(graph_features_local_impact(client_id, max_feat=lc_max_feat))
 
-with feature_selection:
-    st.header('Sélectionnez 2 features pour analyse')
-    col_feat_1, col_feat_2 = st.columns(2, gap='large')
+        st.image(data_path + 'blank_space.png', use_column_width=True)
 
-    # Feature 1
-    # Input utilisateur feature 1
-    col_feat_1.subheader('Feature 1:')
-    is_wf_1 = col_feat_1.checkbox(
-        "Liste par ordre d'importance pour le client",
-        value=True,
-        key='is_wf_1')
-    f_sublist_options_1 = [
-        'Features de la demande de prêt',
-        'Feature des prêts antérieurs',
-        'Toutes les features']
-    filter_1 = col_feat_1.radio(
-        label='Affiner la liste des features',
-        options=f_sublist_options_1,
-        index=0,
-        key='filter_1')
+    with feature_selection:
+        st.header('Sélectionnez 2 features pour analyse')
+        col_feat_1, col_feat_2 = st.columns(2, gap='large')
 
-    # Liste de sélection selon l'input pour feature 1
-    if filter_1=='Features de la demande de prêt': filter_1 = 'current'
-    elif filter_1=='Feature des prêts antérieurs': filter_1 = 'previous'
-    else: filter_1 = 'all'
-    features_list_1 = get_feature_selection_list(client_id, is_wf_1, filter_1)
+        # Feature 1
+        # Input utilisateur feature 1
+        col_feat_1.subheader('Feature 1:')
+        is_wf_1 = col_feat_1.checkbox(
+            "Liste par ordre d'importance pour le client",
+            value=True,
+            key='is_wf_1')
+        f_sublist_options_1 = [
+            'Features de la demande de prêt',
+            'Feature des prêts antérieurs',
+            'Toutes les features']
+        filter_1 = col_feat_1.radio(
+            label='Affiner la liste des features',
+            options=f_sublist_options_1,
+            index=0,
+            key='filter_1')
 
-    # Sélection de feature 1 dans la liste déroulante
-    feature_1 = col_feat_1.selectbox(
-        label="Nom de la feature 1:",
-        options=features_list_1,
-        index=0,
-        key='feature_1')
+        # Liste de sélection selon l'input pour feature 1
+        if filter_1=='Features de la demande de prêt': filter_1 = 'current'
+        elif filter_1=='Feature des prêts antérieurs': filter_1 = 'previous'
+        else: filter_1 = 'all'
+        features_list_1 = get_feature_selection_list(client_id, is_wf_1, filter_1)
 
-    # Affichage graphique feature 1
-    col_feat_1.image(graph_feature(client_id, feature_1))
+        # Sélection de feature 1 dans la liste déroulante
+        feature_1 = col_feat_1.selectbox(
+            label="Nom de la feature 1:",
+            options=features_list_1,
+            index=0,
+            key='feature_1')
 
-    # Feature 2
-    # Input utilisateur feature 2
-    col_feat_2.subheader('Feature 2:')
-    is_wf_2 = col_feat_2.checkbox(
-        "Liste par ordre d'importance pour le client",
-        value=True,
-        key='is_wf_2')
-    f_sublist_options_2 = [
-        'Features de la demande de prêt',
-        'Feature des prêts antérieurs',
-        'Toutes les features']
-    filter_2 = col_feat_2.radio(
-        label='Affiner la liste des features',
-        options=f_sublist_options_2,
-        index=0,
-        key='filter_2')
+        # Affichage graphique feature 1
+        col_feat_1.image(graph_feature(client_id, feature_1))
 
-    # Liste de sélection selon l'input pour feature 2
-    if filter_2=='Features de la demande de prêt': filter_2 = 'current'
-    elif filter_2=='Feature des prêts antérieurs': filter_2 = 'previous'
-    else: filter_2 = 'all'
-    features_list_2 = get_feature_selection_list(client_id, is_wf_2, filter_2)
+        # Feature 2
+        # Input utilisateur feature 2
+        col_feat_2.subheader('Feature 2:')
+        is_wf_2 = col_feat_2.checkbox(
+            "Liste par ordre d'importance pour le client",
+            value=True,
+            key='is_wf_2')
+        f_sublist_options_2 = [
+            'Features de la demande de prêt',
+            'Feature des prêts antérieurs',
+            'Toutes les features']
+        filter_2 = col_feat_2.radio(
+            label='Affiner la liste des features',
+            options=f_sublist_options_2,
+            index=0,
+            key='filter_2')
 
-    # Sélection de feature 2 dans la liste déroulante
-    feature_2 = col_feat_2.selectbox(
-        label="Nom de la feature 2:",
-        options=features_list_2,
-        index=0,
-        key='feature_2')
+        # Liste de sélection selon l'input pour feature 2
+        if filter_2=='Features de la demande de prêt': filter_2 = 'current'
+        elif filter_2=='Feature des prêts antérieurs': filter_2 = 'previous'
+        else: filter_2 = 'all'
+        features_list_2 = get_feature_selection_list(client_id, is_wf_2, filter_2)
 
-    # Affichage graphique feature 2
-    col_feat_2.image(graph_feature(client_id, feature_2))
+        # Sélection de feature 2 dans la liste déroulante
+        feature_2 = col_feat_2.selectbox(
+            label="Nom de la feature 2:",
+            options=features_list_2,
+            index=0,
+            key='feature_2')
 
-    st.image(data_path + 'blank_space.png', use_column_width=True)
+        # Affichage graphique feature 2
+        col_feat_2.image(graph_feature(client_id, feature_2))
 
-    # Graphe bivarié
-    if feature_1!=feature_2:
-        img, size = bivar(feature_1, feature_2)
-        if size == 'large': bivar_col, _ = st.columns([3, 1])
-        else: bivar_col, _ = st.columns(2)
-        bivar_col.subheader("Analyse bivariée entre les 2 features")
-        bivar_col.image(img)
+        st.image(data_path + 'blank_space.png', use_column_width=True)
+
+        # Graphe bivarié
+        if feature_1!=feature_2:
+            img, size = bivar(feature_1, feature_2)
+            if size == 'large': bivar_col, _ = st.columns([3, 1])
+            else: bivar_col, _ = st.columns(2)
+            bivar_col.subheader("Analyse bivariée entre les 2 features")
+            bivar_col.image(img)
+
+with ft:
+    st.dataframe(df_features)
