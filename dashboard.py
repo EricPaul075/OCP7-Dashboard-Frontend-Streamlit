@@ -9,7 +9,8 @@ data_path = './data/'
 tmp = data_path + 'tmp/'
 if not os.path.exists(tmp):
     os.makedirs(tmp)
-url_server = 'https://ocp7-dbbackend.herokuapp.com'  # pour fonctionnement par défaut de fastAPI
+url_server = 'https://ocp7-dbbackend.herokuapp.com'  # pour fonctionnement avec heroku
+#url_server = 'http://127.0.0.1:8000'  # pour fonctionnement par défaut de fastAPI
 timeout = 30  # valeur maximum du timeout de requête
 
 # Configuration de l'affichage sur toute la largeur de la page web
@@ -23,7 +24,9 @@ def load_id_list():
     :return: list, liste des numéros d'identification.
     """
     r = requests.get(url_server + '/clients_list', timeout=timeout)
-    return r.json()['id_list']
+    clients_list = r.json()['id_list']
+    clients_list = [""] + clients_list
+    return clients_list
 
 clients_id_list = load_id_list()
 
@@ -59,10 +62,15 @@ def get_feature_selection_list(client_id, is_wf, filter):
         - 'previous': features des prêts antérieurs.
     :return: list, list de features
     """
+    if is_wf and client_id not in clients_id_list[1:]:
+        return [' ']
+    ci = 0 if client_id=='' else client_id
     query_param = {'is_wf': is_wf, 'filter': filter}
-    r = requests.get(url_server + '/' + str(client_id) + '/feature_selection',
+    r = requests.get(url_server + '/' + str(ci) + '/feature_selection',
                      params=query_param, timeout=timeout)
-    return r.json()['feature_selection']
+    fs = r.json()['feature_selection']
+    fs = [' '] + fs
+    return fs
 
 
 def set_gauge(client_id):
@@ -72,6 +80,8 @@ def set_gauge(client_id):
     :param client_id: int , N° d'identification client.
     :return: plotly.graph_objects.Figure
     """
+    if client_id not in clients_id_list[1:]:
+        return None
     r = requests.get(url_server + '/' + str(client_id))
     score = r.json()['score']
     result = 'Crédit non accepté' if score >= 0.5 else 'Crédit accepté'
@@ -122,14 +132,17 @@ def graph_features_local_impact(client_id, max_feat):
         le graphique.
     :return: str, chemin du fichier de l'image.
     """
-    filepath = tmp + f"gfli_{client_id}_{max_feat}.png"
-    if not os.path.exists(filepath):
-        query_param = {'max_feat': max_feat}
-        r = requests.get(url_server + '/' + str(client_id) + '/local_impact',
-                         stream=True, params=query_param, timeout=timeout)
-        with open(filepath, 'wb') as f:
-            shutil.copyfileobj(r.raw, f)
-    return filepath
+    if client_id in clients_id_list[1:]:
+        filepath = tmp + f"gfli_{client_id}_{max_feat}.png"
+        if not os.path.exists(filepath):
+            query_param = {'max_feat': max_feat}
+            r = requests.get(url_server + '/' + str(client_id) + '/local_impact',
+                             stream=True, params=query_param, timeout=timeout)
+            with open(filepath, 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
+        return filepath
+    else:
+        return data_path + 'blank_space.png'
 
 
 def graph_feature(client_id, feature):
@@ -144,15 +157,18 @@ def graph_feature(client_id, feature):
     :param feature: str, nom de la feature.
     :return: str, chemin du fichier de l'image.
     """
-    f_idx = features_list.index(feature)
-    filepath = tmp + f"feature_{client_id}_{f_idx}.png"
-    if not os.path.exists(filepath):
-        query_param = {'feature': feature}
-        r = requests.get(url_server + '/' + str(client_id) + '/feature',
-                         stream=True, params=query_param, timeout=timeout)
-        with open(filepath, 'wb') as f:
-            shutil.copyfileobj(r.raw, f)
-    return filepath
+    if (client_id in clients_id_list[1:]) and (feature in features_list):
+        f_idx = features_list.index(feature)
+        filepath = tmp + f"feature_{client_id}_{f_idx}.png"
+        if not os.path.exists(filepath):
+            query_param = {'feature': feature}
+            r = requests.get(url_server + '/' + str(client_id) + '/feature',
+                             stream=True, params=query_param, timeout=timeout)
+            with open(filepath, 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
+        return filepath
+    else:
+        return data_path + 'blank_space.png'
 
 
 def bivar(feature_1, feature_2):
@@ -168,6 +184,8 @@ def bivar(feature_1, feature_2):
         - img_size: attribut ('normal', 'large') pour
             l'affichage.
     """
+    if (feature_1 not in features_list) or (feature_2 not in features_list) or (feature_1==feature_2):
+        return data_path + 'blank_space.png', 'normal'
     f1_idx = features_list.index(feature_1)
     f2_idx = features_list.index(feature_2)
     filepath_1 = tmp + f"bivar{f1_idx}_{f2_idx}.png"
@@ -214,7 +232,8 @@ with client:
 
     # Jauge de résultat du crédit
     score_col.header("Situation d'acceptation du crédit")
-    score_col.plotly_chart(set_gauge(client_id))
+    if client_id in clients_id_list[1:]:
+        score_col.plotly_chart(set_gauge(client_id))
 
 with features_impact:
     gl_col, lc_col = st.columns(2, gap='large')
