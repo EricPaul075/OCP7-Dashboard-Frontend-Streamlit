@@ -1,5 +1,5 @@
 # OCP7-Dashboard-Frontend-Streamlit
-Deploy a machine learning model to the web (frontend): streamlit dashboard as user interface
+Streamlit dashboard frontend (user interface) to deploy a machine learning model to the web
 
 Interfaced with an API backend and deployed with Heroku
 
